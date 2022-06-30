@@ -1,26 +1,19 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React from 'react'
+import { QueryClientProvider } from 'react-query'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { queryClient } from './api'
+import Router from './app/routes'
+import Home from './app/routes/home'
+import MyCat from './app/routes/my-cat'
+import MyCats from './app/routes/my-cats'
+import { GlobalProvider } from './app/state'
 
 function App() {
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <Router />
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
