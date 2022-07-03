@@ -1,7 +1,8 @@
 import { QueryClient } from 'react-query'
 import axios, { AxiosRequestConfig } from 'axios'
+import tokenStore from './tokenStore';
 
-export const END_POINT = 'https://api.thecatapi.com/v1/images/search'
+export const BASE_URL = 'https://api.thecatapi.com/v1/images/search'
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,49 +17,67 @@ export const queryClient = new QueryClient({
   }
 })
 
-const axiosWrapper = async ({
-  method,
-  url,
-  params,
-  body
-}: {
-  method: 'get' | 'post' | 'put' | 'delete'
-  url: string
-  params?: {}
-  body?: {}
-}) => {
-  const token = localStorage.getItem('token')
-  try {
-    const config: AxiosRequestConfig = {
-      baseURL: END_POINT,
-      withCredentials: true,
-      params,
-      headers: {
-        Authorization: token ? `Bearer ${token}` : ''
+
+const axiosClient = axios.create();
+
+
+axiosClient.interceptors.request.use(
+  (config) => {
+      const token = tokenStore.getAccessToken();
+      config.baseURL = BASE_URL
+      if(!config.headers) config.headers =  {};
+      if (token) {
+          config.headers['Authorization'] =  `Bearer ${token}`
+      }
+      config.headers['Content-Type'] = 'application/json';
+      config.headers['Accept'] = 'application/json';
+      config.withCredentials = true;
+      return config;
+  },
+  error => {
+      Promise.reject(error)
+  });
+
+
+
+  axiosClient.interceptors.response.use(
+  function (response) {
+    return response;
+  }, 
+  async function (error) {
+    const originalRequest = error.config;
+    let res = error.response;
+    if (res.status === 401 && originalRequest.url === 'auth api url') {
+      window.location.href = "https://localhost:3000/login";
+      return Promise.reject(error);
+    }
+    if (error.response.status === 401 && !originalRequest._retry){
+      originalRequest._retry = true;
+      const refreshToken = await tokenStore.getRefreshToken();
+      const { status, data } = await axios.post(
+        `http://localhost:3000/refresh`, // token refresh api
+        {
+          refreshToken,
+        }
+      );
+      if(status === 201){
+        tokenStore.setToken(res.data);
+        axios.defaults.headers.common['Authorization'] = 'Bearer ' + tokenStore.getAccessToken();
+        return axios(originalRequest);
       }
     }
-    const { data } =
-      (method === 'get' && (await axios.get(url, config))) ||
-      (method === 'post' && (await axios.post(url, body, config))) ||
-      (method === 'put' && (await axios.put(url, body, config))) ||
-      (method === 'delete' && (await axios.delete(url, config))) ||
-      {}
-    return data
-  } catch (error: any) {
-    console.log(error.response.status, error)
-    if (error.response.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/401'
-    }
+    console.error("문제가 발생하였습니다.  Status Code: " + res.status);
+    return Promise.reject(error);
   }
-}
+);
 
-export const GET = (url: string, params?: {}) => axiosWrapper({ method: 'get', url, params })
+const makeRequest = <T>(config: AxiosRequestConfig) => axiosClient.request<any, T>(config);
+export default makeRequest;
 
-export const POST = (url: string, body?: {}, params?: {}) =>
-  axiosWrapper({ method: 'post', url, body, params })
+// api call example 
+// const creds = { username: "user", password: "pass" };
 
-export const PUT = (url: string, body?: {}, params?: {}) =>
-  axiosWrapper({ method: 'put', url, body, params })
+// axios<User>({ method: "POST", url: "/api/v1/auth/login", data: creds })
+//   .then((user) => { /* do whatever with user here */ })
+//   .catch((err) => { /* handle errors */);
 
-export const DELETE = (url: string) => axiosWrapper({ method: 'delete', url })
